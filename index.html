@@ -217,6 +217,22 @@
     font-family:var(--disp); font-weight:700; font-size:17px; padding:2px 9px;
     border-radius:7px; background:#EEF3EF; color:var(--ink);
   }
+  .mstatus{font-family:var(--disp); font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:12px; padding:3px 9px; border-radius:7px; background:#EEF3EF; color:var(--muted)}
+  .mstatus.l1{background:var(--pine); color:#fff}
+  .mstatus.l2{background:var(--crimson); color:#fff}
+  .mstatus.tie{background:#E7E4D8; color:var(--ink)}
+  .mstrip{display:flex; align-items:stretch; gap:2px; margin-top:9px}
+  .mstrip .mgap{width:0; border-left:1px dashed var(--line); margin:0 3px}
+  .mcell{flex:1 1 0; min-width:0; height:19px; border-radius:3px; background:#F1EFE6; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:600; font-size:8.5px; color:#B7B4A7}
+  .mcell.w1{background:var(--pine); border-color:var(--pine); color:#fff}
+  .mcell.w2{background:var(--crimson); border-color:var(--crimson); color:#fff}
+  .mcell.halve{background:#D5D2C4; border-color:#C7C4B5; color:#6f6c5e}
+  .mcell.pending{background:#F5F3EA; color:#C9C6B9}
+  .mfoot{font-size:11.5px; color:var(--muted); margin-top:7px; font-variant-numeric:tabular-nums}
+  .mlegend{display:flex; gap:14px; padding:9px 12px; border-bottom:1px solid var(--line); font-size:11px; color:var(--muted)}
+  .mlegend span{display:flex; align-items:center; gap:5px}
+  .mlegend i.lg{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .mlegend i.lg.w1{background:var(--pine)} .mlegend i.lg.w2{background:var(--crimson)} .mlegend i.lg.halve{background:#D5D2C4}
   .totalbar{
     display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line);
     border-radius:12px; overflow:hidden; margin-bottom:14px; border:1px solid var(--line);
@@ -226,6 +242,15 @@
   .totalbar .t.a .lb{color:var(--t1)} .totalbar .t.b .lb{color:var(--t2)}
   .totalbar .t .num{font-family:var(--disp); font-weight:700; font-size:40px; line-height:1; margin-top:2px}
   .breakdown{font-size:11px; color:var(--muted); margin-top:3px}
+  .sum-tbl{width:100%; border-collapse:collapse; font-size:13.5px}
+  .sum-tbl th{font-family:var(--disp); text-transform:uppercase; letter-spacing:.05em; font-size:10.5px; color:var(--muted); font-weight:600; padding:9px 8px; border-bottom:1px solid var(--line); background:#F5F3EA; text-align:center}
+  .sum-tbl th.l{text-align:left; padding-left:12px}
+  .sum-tbl th.a{color:var(--t1)} .sum-tbl th.b{color:var(--t2)}
+  .sum-tbl td{padding:9px 8px; border-bottom:1px solid var(--line); text-align:center; font-weight:600; font-variant-numeric:tabular-nums}
+  .sum-tbl td.l{text-align:left; padding-left:12px; font-weight:500}
+  .sum-tbl td.l small{color:var(--muted); font-weight:400}
+  .sum-tbl tfoot td{background:var(--ink); color:#EDE9DC; font-family:var(--disp); font-weight:700; font-size:17px; border-bottom:0}
+  .sum-tbl tfoot td.l{text-transform:uppercase; letter-spacing:.05em; font-size:12px}
 
   /* ---------- config ---------- */
   .cfg-tbl{width:100%; border-collapse:collapse; font-size:13.5px}
@@ -316,10 +341,17 @@
       <div class="t b"><div class="lb" id="tb2name">Equipo 2</div><div class="num" id="tb2">0</div><div class="breakdown" id="tb2bd">—</div></div>
     </div>
 
-    <div class="sec-eyebrow">Match fourball · por línea</div>
+    <div class="sec-eyebrow">Puntos generales</div>
+    <div class="card"><table class="sum-tbl">
+      <thead><tr><th class="l">Modalidad</th><th class="a" id="sumT1">E1</th><th class="b" id="sumT2">E2</th></tr></thead>
+      <tbody id="sumBody"></tbody>
+      <tfoot><tr><td class="l">Total <small>(12)</small></td><td id="sumTotA" class="tnum">0</td><td id="sumTotB" class="tnum">0</td></tr></tfoot>
+    </table></div>
+
+    <div class="sec-eyebrow">Match · 2 vs 2 por línea</div>
     <div class="card" id="matchCard"></div>
 
-    <div class="sec-eyebrow">Fourball stableford · parejas</div>
+    <div class="sec-eyebrow">Fourball · mejor pelota neto</div>
     <div class="card" id="pairCard"></div>
 
     <div class="sec-eyebrow">Stableford individual · medal</div>
@@ -431,32 +463,35 @@ function playerTotals(pid){
   for(let i=0;i<18;i++){const d=holeData(pid,i); if(d.gross!=null){gross+=d.gross;pts+=d.pts;holes++;}}
   return {gross,pts,holes};
 }
-// mejor pelota (better-ball) stableford de una pareja
-function pairStableford(ids){
-  let pts=0,holes=0;
+// mejor pelota neto (better-ball medal) de una pareja: suma del menor neto por hoyo
+function pairNet(ids){
+  let net=0,holes=0;
   for(let i=0;i<18;i++){
-    const cand=ids.map(id=>holeData(id,i)).filter(d=>d.gross!=null);
-    if(cand.length){ pts+=Math.max(...cand.map(d=>d.pts)); holes++; }
+    const cand=ids.map(id=>holeData(id,i)).filter(d=>d.net!=null);
+    if(cand.length){ net+=Math.min(...cand.map(d=>d.net)); holes++; }
   }
-  return {pts,holes};
+  return {net,holes};
 }
-// match play fourball: mejor neto por hoyo
+// match play fourball: mejor neto por hoyo, con estado hoyo a hoyo
 function lineMatch(line){
-  let w1=0,w2=0,played=0;
+  const holes=[]; let w1=0,w2=0,played=0;
   for(let i=0;i<18;i++){
     const n1=line.t1.map(id=>holeData(id,i)).filter(d=>d.net!=null).map(d=>d.net);
     const n2=line.t2.map(id=>holeData(id,i)).filter(d=>d.net!=null).map(d=>d.net);
-    if(!n1.length||!n2.length) continue;
+    if(!n1.length||!n2.length){ holes.push(null); continue; }
     played++;
     const b1=Math.min(...n1), b2=Math.min(...n2);
-    if(b1<b2) w1++; else if(b2<b1) w2++;
+    if(b1<b2){ w1++; holes.push(1); }
+    else if(b2<b1){ w2++; holes.push(2); }
+    else holes.push(0);
   }
-  let ptsA=0,ptsB=0,res;
-  if(played===0){res="Sin jugar"; }
-  else if(w1>w2){ptsA=1; res="+"+(w1-w2)+" · "+S.teams[1];}
-  else if(w2>w1){ptsB=1; res="+"+(w2-w1)+" · "+S.teams[2];}
-  else {ptsA=0.5;ptsB=0.5; res="Empatado";}
-  return {w1,w2,played,ptsA,ptsB,res};
+  const diff=w1-w2, remaining=18-played, lead=Math.abs(diff);
+  const leader = diff>0?1 : diff<0?2 : 0;
+  const closed = played>0 && lead>remaining;
+  const dormie = played>0 && !closed && lead>0 && lead===remaining;
+  let ptsA=0,ptsB=0;
+  if(played>0){ if(w1>w2) ptsA=1; else if(w2>w1) ptsB=1; else {ptsA=0.5;ptsB=0.5;} }
+  return {w1,w2,played,holes,diff,remaining,leader,lead,closed,dormie,ptsA,ptsB};
 }
 
 /* ---------------- cómputo global de puntos ---------------- */
@@ -467,15 +502,20 @@ function computeAll(){
   const matches=S.lines.map(l=>lineMatch(l));
   matches.forEach(m=>{A+=m.ptsA;B+=m.ptsB;bd.A.match+=m.ptsA;bd.B.match+=m.ptsB;});
 
-  // parejas (fourball stableford)
+  // parejas (fourball · mejor pelota neto, menor total gana)
   const pairs=[];
   S.lines.forEach((l,li)=>{
-    pairs.push({team:1,ids:l.t1,line:li, ...pairStableford(l.t1)});
-    pairs.push({team:2,ids:l.t2,line:li, ...pairStableford(l.t2)});
+    pairs.push({team:1,ids:l.t1,line:li, ...pairNet(l.t1)});
+    pairs.push({team:2,ids:l.t2,line:li, ...pairNet(l.t2)});
   });
-  pairs.sort((a,b)=>b.pts-a.pts);
+  pairs.sort((a,b)=>{
+    if(a.holes===0 && b.holes===0) return 0;
+    if(a.holes===0) return 1;
+    if(b.holes===0) return -1;
+    return a.net-b.net;
+  });
   const pairCut=Math.floor(pairs.length/2);
-  pairs.forEach((p,idx)=>{ p.win=idx<pairCut && p.pts>0; if(p.win){ if(p.team===1){A++;bd.A.pair++;} else {B++;bd.B.pair++;} } });
+  pairs.forEach((p,idx)=>{ p.win=idx<pairCut && p.holes>0; if(p.win){ if(p.team===1){A++;bd.A.pair++;} else {B++;bd.B.pair++;} } });
 
   // individual (medal stableford)
   const inds=S.players.map(p=>({id:p.id,team:p.team, ...playerTotals(p.id)}));
@@ -607,19 +647,46 @@ function renderTablero(){
   document.getElementById("tb1bd").textContent=`M ${fmt(r.bd.A.match)} · P ${r.bd.A.pair} · I ${r.bd.A.ind}`;
   document.getElementById("tb2bd").textContent=`M ${fmt(r.bd.B.match)} · P ${r.bd.B.pair} · I ${r.bd.B.ind}`;
 
-  // match
+  // tabla de puntos generales
+  document.getElementById("sumT1").textContent=S.teams[1];
+  document.getElementById("sumT2").textContent=S.teams[2];
+  const sumRow=(label,cap,a,b)=>`<tr><td class="l">${label} <small>(${cap})</small></td><td class="tnum">${fmt(a)}</td><td class="tnum">${fmt(b)}</td></tr>`;
+  document.getElementById("sumBody").innerHTML =
+    sumRow("Match 2v2",3,r.bd.A.match,r.bd.B.match)+
+    sumRow("Fourball parejas",3,r.bd.A.pair,r.bd.B.pair)+
+    sumRow("Individual Stableford",6,r.bd.A.ind,r.bd.B.ind);
+  document.getElementById("sumTotA").textContent=fmt(r.A);
+  document.getElementById("sumTotB").textContent=fmt(r.B);
+
+  // match — estado en tiempo real por línea
   const mc=document.getElementById("matchCard");
-  mc.innerHTML = r.matches.map((m,i)=>{
+  const legend=`<div class="mlegend"><span><i class="lg w1"></i>gana ${S.teams[1]}</span><span><i class="lg w2"></i>gana ${S.teams[2]}</span><span><i class="lg halve"></i>empate</span></div>`;
+  mc.innerHTML = legend + r.matches.map((m,i)=>{
     const l=S.lines[i];
     const nm=ids=>ids.map(id=>pById(id).name).join(" / ");
     const scoreTxt = m.played? (m.w1+" – "+m.w2) : "—";
+    let badge,badgeCls,foot;
+    if(m.played===0){ badge="Sin jugar"; badgeCls="tie"; foot="Esperando scores"; }
+    else if(m.leader===0){ badge="Igualados"; badgeCls="tie"; foot=`${m.played} jugados · quedan ${m.remaining}`; }
+    else {
+      badgeCls="l"+m.leader;
+      badge = m.closed ? `Gana E${m.leader}` : `E${m.leader} +${m.lead}`;
+      foot = `${m.played} jugados · quedan ${m.remaining}`+(m.closed?" · cerrado":m.dormie?" · dormie":"");
+    }
+    const strip = m.holes.map((h,hi)=>{
+      const cls = h===1?"w1":h===2?"w2":h===0?"halve":"pending";
+      const sep = hi===9?'<span class="mgap"></span>':'';
+      return sep+`<span class="mcell ${cls}">${hi+1}</span>`;
+    }).join("");
     return `<div class="matchrow">
-      <div class="mtop"><span class="lnm">Línea ${i+1}</span><span class="res" style="color:${m.ptsA>m.ptsB?'var(--t1)':m.ptsB>m.ptsA?'var(--t2)':'var(--muted)'}">${m.res}</span></div>
+      <div class="mtop"><span class="lnm">Línea ${i+1}</span><span class="mstatus ${badgeCls}">${badge}</span></div>
       <div class="mgrid">
         <div class="pr"><span class="p1">${nm(l.t1)}</span></div>
         <div class="score tnum">${scoreTxt}</div>
         <div class="pr right"><span class="p2">${nm(l.t2)}</span></div>
       </div>
+      <div class="mstrip">${strip}</div>
+      <div class="mfoot">${foot}</div>
     </div>`;
   }).join("");
 
@@ -631,9 +698,9 @@ function renderTablero(){
     const earn = p.win? `<span class="earn win ${teamColor(p.team)}">+1</span>` : `<span class="earn">0</span>`;
     return `<div class="board-row${cut}">
       <div class="rank tnum">${idx+1}</div>
-      <div class="who"><div class="nm"><span class="dotm ${teamColor(p.team)}"></span>${nm}</div><div class="sub">${S.teams[p.team]} · ${p.holes} hoyos</div></div>
-      <div class="bpts tnum">${p.pts}</div>${earn}
-      ${cut?'<span class="cutlbl">Suman los 3 mejores</span>':''}
+      <div class="who"><div class="nm"><span class="dotm ${teamColor(p.team)}"></span>${nm}</div><div class="sub">${S.teams[p.team]} · ${p.holes} hoyos · neto</div></div>
+      <div class="bpts tnum">${p.holes?p.net:'·'}</div>${earn}
+      ${cut?'<span class="cutlbl">Suman las 3 mejores</span>':''}
     </div>`;
   }).join("") || emptyBlock();
 
