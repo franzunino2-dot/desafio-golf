@@ -169,6 +169,22 @@
     font-size:12.5px; color:var(--muted); padding:2px 4px 12px; line-height:1.4;
   }
   .hint b{color:var(--ink)}
+  .syncbar{margin:2px 0 14px; padding:9px 12px; border-radius:10px; font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:8px}
+  .syncbar::before{content:""; width:8px; height:8px; border-radius:50%; flex:none}
+  .syncbar.off{background:#F1EFE6; color:var(--muted)}
+  .syncbar.off::before{background:#B7B4A7}
+  .syncbar.on{background:#E8F1EC; color:var(--pine)}
+  .syncbar.on::before{background:var(--pine-soft); box-shadow:0 0 0 3px rgba(46,125,91,.18)}
+  .syncbar.wait{background:#FBF2E7; color:#8a6a25}
+  .syncbar.wait::before{background:#C99A3A}
+  .sync-in{width:100%; height:38px; border:1.5px solid var(--line); border-radius:8px; background:#fff; font-family:var(--body); font-size:13px; color:var(--ink); padding:0 10px}
+  .sync-in:focus{outline:none; border-color:var(--pine)}
+  .pcard-head{display:flex; justify-content:space-between; align-items:center; padding:2px 4px 10px; gap:10px}
+  .pcard-head .pn{font-family:var(--disp); font-weight:700; font-size:18px; text-transform:uppercase; letter-spacing:.02em; display:flex; align-items:center; gap:8px}
+  .pcard-head .pn .dotm{width:10px;height:10px;border-radius:50%;flex:none}
+  .pcard-head .pn .dotm.t1{background:var(--t1)} .pcard-head .pn .dotm.t2{background:var(--t2)}
+  .pcard-head .pstat{font-size:12px; color:var(--muted); text-align:right}
+  .pcard-head .pstat b{color:var(--pine); font-family:var(--disp); font-size:16px}
 
   /* ---------- tablero ---------- */
   .board-row{
@@ -327,10 +343,11 @@
   <section class="view on" id="view-cargar">
     <div class="card">
       <div class="picker">
-        <div class="lbl">¿Quién sos?</div>
+        <div class="lbl">Jugador · tocá para ver o cargar</div>
         <div class="chips" id="playerChips"></div>
       </div>
     </div>
+    <div id="syncBar" class="syncbar off">Modo local · sin sincronizar</div>
     <div id="cardWrap"></div>
   </section>
 
@@ -361,6 +378,14 @@
   <!-- ============ CONFIG ============ -->
   <section class="view" id="view-config">
     <div class="warn" id="linesWarn"></div>
+
+    <div class="sec-eyebrow">Sincronización en vivo</div>
+    <div class="card" style="padding:12px">
+      <div class="cfg-note" style="padding:0 0 8px">Pegá la URL del servidor (Railway) y tocá Conectar. Cada jugador abre la app, elige su jugador y todo se sincroniza solo.</div>
+      <input id="syncInput" class="sync-in" placeholder="https://tu-proyecto.up.railway.app">
+      <button class="btn" id="syncConnect" style="margin-top:8px">Conectar</button>
+      <div id="syncCfgStatus" class="cfg-note" style="padding:8px 0 0"></div>
+    </div>
 
     <div class="sec-eyebrow">Jugadores y hándicap</div>
     <div class="card">
@@ -421,6 +446,7 @@ function parseState(raw){
     const s=JSON.parse(raw);
     if(!s.players||!s.course||!s.lines||!s.scores) return defaultState();
     s.players.forEach(p=>{ if(!s.scores[p.id]) s.scores[p.id]=Array(18).fill(null); });
+    if(s.syncUrl==null) s.syncUrl="";
     return s;
   }catch(e){ return defaultState(); }
 }
@@ -443,7 +469,7 @@ function defaultState(){
     {t1:["nico","peishe"], t2:["pepe","felipe"]},
   ];
   const scores={}; players.forEach(p=>scores[p.id]=Array(18).fill(null));
-  return {teams:{1:"Equipo 1",2:"Equipo 2"}, players, course:{par,si}, lines, scores};
+  return {teams:{1:"Equipo 1",2:"Equipo 2"}, players, course:{par,si}, lines, scores, syncUrl:""};
 }
 /* estado y jugador actual se inicializan en boot() */
 
@@ -582,7 +608,11 @@ function renderCard(){
     return `<div class="subtot"><span></span><span class="tnum" style="text-align:center">${par}</span><span>${label}</span><span class="big tnum">${g||'·'}</span><span></span><span class="big tnum" data-subpts="${from}">${pt}</span></div>`;
   };
   const head=`<div class="scorehead"><span>Hoyo</span><span>Par</span><span>Golpes</span><span class="r">Score</span><span class="r">Neto</span><span class="r">Pts</span></div>`;
-  wrap.innerHTML=`<div class="card">
+  const phead=`<div class="pcard-head">
+    <div class="pn"><span class="dotm ${teamColor(p.team)}"></span>${p.name}</div>
+    <div class="pstat"><b class="tnum">${playerTotals(currentPid).pts}</b> pts · <span class="tnum">${playerTotals(currentPid).gross||0}</span> golpes · <span class="tnum">${playerTotals(currentPid).holes}</span>/18</div>
+  </div>`;
+  wrap.innerHTML=phead+`<div class="card">
     ${head}
     ${block(0,9)}
     ${sub(0,9,"Ida")}
@@ -607,7 +637,9 @@ function onScoreInput(e){
   if(v.length>2) v=v.slice(0,2);
   e.target.value=v;
   S.scores[currentPid][i]= v===""?null:parseInt(v,10);
+  if(S.syncUrl) DIRTY[currentPid+"_"+i]=true;
   save();
+  scheduleSyncPush(currentPid,i,S.scores[currentPid][i]);
   // patch fila
   const d=holeData(currentPid,i);
   const card=e.target.closest(".card");
@@ -780,6 +812,19 @@ function renderConfig(){
     if(team===1) S.lines[li].t1[slot]=e.target.value; else S.lines[li].t2[slot]=e.target.value;
     save(); renderAll();
   }));
+
+  // sincronización
+  const syncInput=document.getElementById("syncInput");
+  if(syncInput){
+    const st=document.getElementById("syncCfgStatus");
+    syncInput.value=S.syncUrl||"";
+    st.textContent = S.syncUrl ? "Conectado. Sincroniza cada pocos segundos." : "Sin conectar (modo local).";
+    document.getElementById("syncConnect").onclick=()=>{
+      let u=(syncInput.value||"").trim().replace(/\/+$/,"");
+      S.syncUrl=u; save(); startSync();
+      st.textContent = S.syncUrl ? "Conectado. Sincroniza cada pocos segundos." : "Sincronización desactivada (modo local).";
+    };
+  }
 }
 
 /* ---------------- render all + navegación ---------------- */
@@ -798,9 +843,64 @@ document.querySelectorAll("nav button").forEach(b=>{
 });
 document.getElementById("resetBtn").addEventListener("click",()=>{
   if(confirm("¿Borrar todos los scores cargados? Los equipos, hándicaps y líneas se mantienen.")){
-    S.players.forEach(p=>S.scores[p.id]=Array(18).fill(null)); save(); renderAll(); renderConfig();
+    S.players.forEach(p=>S.scores[p.id]=Array(18).fill(null)); save();
+    if(S.syncUrl){ fetch(`${S.syncUrl}?action=clear`).catch(()=>{}); }
+    renderAll(); renderConfig();
   }
 });
+
+/* ---------------- sincronización en vivo (Google Sheets / Apps Script) ---------------- */
+const SYNC={timer:null,lastOk:0,pushT:{}};
+const DIRTY={};
+function scheduleSyncPush(pid,i,val){
+  if(!S.syncUrl) return;
+  const k=pid+"_"+i;
+  clearTimeout(SYNC.pushT[k]);
+  SYNC.pushT[k]=setTimeout(()=>{
+    const g=(val==null||val==="")?"":val;
+    fetch(`${S.syncUrl}?action=set&player=${encodeURIComponent(pid)}&hole=${i+1}&gross=${g}`)
+      .then(()=>{SYNC.lastOk=Date.now();delete DIRTY[k];updateSyncBadge();})
+      .catch(()=>updateSyncBadge());
+  },500);
+}
+function syncPull(){
+  if(!S.syncUrl) return;
+  fetch(`${S.syncUrl}?action=get`).then(r=>r.json()).then(d=>{
+    if(d&&d.scores){
+      let changed=false, viewedChanged=false;
+      Object.keys(d.scores).forEach(pid=>{
+        if(!S.scores[pid]) return;
+        const arr=d.scores[pid];
+        for(let i=0;i<18;i++){
+          if(DIRTY[pid+"_"+i]) continue;          // no piso lo que se está tipeando en este teléfono
+          const v=(arr[i]==null)?null:arr[i];
+          if(S.scores[pid][i]!==v){ S.scores[pid][i]=v; changed=true; if(pid===currentPid) viewedChanged=true; }
+        }
+      });
+      SYNC.lastOk=Date.now();
+      if(changed) save();
+      renderHeader(); renderPicker();
+      const focused=document.activeElement && document.activeElement.classList && document.activeElement.classList.contains("g-input");
+      if(viewedChanged && !focused) renderCard();
+      if(document.getElementById("view-tablero").classList.contains("on")) renderTablero();
+    }
+    updateSyncBadge();
+  }).catch(()=>updateSyncBadge());
+}
+function startSync(){
+  if(SYNC.timer){clearInterval(SYNC.timer);SYNC.timer=null;}
+  if(!S.syncUrl){updateSyncBadge();return;}
+  syncPull();
+  SYNC.timer=setInterval(syncPull,4000);
+  updateSyncBadge();
+}
+function updateSyncBadge(){
+  const el=document.getElementById("syncBar"); if(!el) return;
+  if(!S.syncUrl){ el.className="syncbar off"; el.textContent="Modo local · sin sincronizar"; return; }
+  const age=Date.now()-SYNC.lastOk;
+  if(SYNC.lastOk && age<9000){ el.className="syncbar on"; el.textContent="En vivo · sincronizado"; }
+  else { el.className="syncbar wait"; el.textContent="Conectando…"; }
+}
 
 /* init */
 async function boot(){
@@ -810,6 +910,7 @@ async function boot(){
   currentPid=(cur && S.players.some(p=>p.id===cur))?cur:S.players[0].id;
   renderAll();
   renderConfig();
+  startSync();
 }
 window.addEventListener("pagehide",()=>{ try{ if(S) Store.set(KEY,JSON.stringify(S)); }catch(e){} });
 boot();
