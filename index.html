@@ -761,19 +761,34 @@ function renderConfig(){
   wEl.innerHTML=`<b>Líneas:</b> hay ${S.lines.length} líneas de 2 vs 2 (${need} lugares) para ${have} jugadores. Con 12 jugadores entran <b>3 líneas</b>. Si querés otra estructura, avisame.`;
 
   // jugadores
+  const golpesDe=p=>Array.from({length:18},(_,i)=>strokesOn(p.h85,S.course.si[i])).reduce((a,b)=>a+b,0);
   const tb=document.getElementById("cfgPlayers"); tb.innerHTML="";
   S.players.forEach(p=>{
-    const golpes=Array.from({length:18},(_,i)=>strokesOn(p.h85,S.course.si[i])).reduce((a,b)=>a+b,0);
     const tr=document.createElement("tr");
     tr.innerHTML=`<td class="l"><span class="dotm ${teamColor(p.team)}"></span>${p.name}</td>
-      <td class="tnum">${p.raw}</td>
+      <td><input class="num-in sm tnum" inputmode="decimal" value="${p.raw}" data-raw="${p.id}"></td>
       <td><input class="num-in sm tnum" inputmode="numeric" value="${p.h85}" data-h85="${p.id}"></td>
-      <td class="strk tnum">${golpes}</td>`;
+      <td class="strk tnum" data-golpes="${p.id}">${golpesDe(p)}</td>`;
     tb.appendChild(tr);
   });
+  // editar HCP real → recalcula 85% y golpes solo
+  tb.querySelectorAll("[data-raw]").forEach(inp=>inp.addEventListener("input",e=>{
+    const id=e.target.dataset.raw;
+    let s=e.target.value.replace(/[^0-9.]/g,""); const parts=s.split("."); if(parts.length>2) s=parts[0]+"."+parts.slice(1).join("");
+    e.target.value=s;
+    const v=parseFloat(s); const p=pById(id);
+    p.raw = isNaN(v)?0:v;
+    p.h85 = Math.round(p.raw*0.85);
+    const h85El=tb.querySelector(`[data-h85="${id}"]`); if(h85El) h85El.value=p.h85;
+    const gEl=tb.querySelector(`[data-golpes="${id}"]`); if(gEl) gEl.textContent=golpesDe(p);
+    save(); renderAll();
+  }));
+  // editar 85% a mano (override) → recalcula golpes
   tb.querySelectorAll("[data-h85]").forEach(inp=>inp.addEventListener("input",e=>{
     const id=e.target.dataset.h85; let v=parseInt(e.target.value.replace(/[^0-9]/g,""),10);
-    if(isNaN(v))v=0; pById(id).h85=v; save(); renderConfig(); renderAll();
+    if(isNaN(v))v=0; const p=pById(id); p.h85=v;
+    const gEl=tb.querySelector(`[data-golpes="${id}"]`); if(gEl) gEl.textContent=golpesDe(p);
+    save(); renderAll();
   }));
 
   // cancha
