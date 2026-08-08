@@ -426,6 +426,7 @@
 
 /* ---------------- storage: window.storage (app Claude) → localStorage (hosteada) → memoria ---------------- */
 const KEY="golf_desafio_v1", CURKEY="golf_cur_v1";
+const SYNC_URL_DEFAULT="https://desafio-golf-backend-production.up.railway.app";
 const mem={};
 const Store={
   async get(k){
@@ -469,7 +470,7 @@ function defaultState(){
     {t1:["nico","peishe"], t2:["pepe","felipe"]},
   ];
   const scores={}; players.forEach(p=>scores[p.id]=Array(18).fill(null));
-  return {teams:{1:"Equipo 1",2:"Equipo 2"}, players, course:{par,si}, lines, scores, syncUrl:""};
+  return {teams:{1:"Equipo 1",2:"Equipo 2"}, players, course:{par,si}, lines, scores, syncUrl:SYNC_URL_DEFAULT};
 }
 /* estado y jugador actual se inicializan en boot() */
 
@@ -906,6 +907,7 @@ function updateSyncBadge(){
 async function boot(){
   const raw=await Store.get(KEY);
   S=parseState(raw);
+  if(!S.syncUrl) S.syncUrl=SYNC_URL_DEFAULT;
   const cur=await Store.get(CURKEY);
   currentPid=(cur && S.players.some(p=>p.id===cur))?cur:S.players[0].id;
   renderAll();
